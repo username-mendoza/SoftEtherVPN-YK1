@@ -34,7 +34,7 @@ Binaries end up in `bin/vpnserver/` and `bin/vpncmd/`.
 
 ## Client setup
 
-Uses standard **OpenVPN community CLI** with `pkcs11-providers libykcs11` — no client patching needed.
+Uses standard OpenVPN with `pkcs11-providers libykcs11` — no client patching needed. Compatible with **OpenVPN community CLI/GUI** and **OpenVPN Connect v3.3+**.
 
 ```
 pkcs11-providers /usr/lib/x86_64-linux-gnu/libykcs11.so
