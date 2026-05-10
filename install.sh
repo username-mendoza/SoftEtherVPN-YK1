@@ -7,7 +7,9 @@ SE_REPO="https://github.com/SoftEtherVPN/SoftEtherVPN_Stable.git"
 SE_TAG="v4.44-9807-rtm"
 PATCH_URL="https://raw.githubusercontent.com/username-mendoza/SoftEtherVPN-YK1/main/yk1.patch"
 DEFAULT_INSTALL_DIR="/opt/vpnserver"
-BUILD_DEPS="build-essential cmake libssl-dev libreadline-dev zlib1g-dev"
+
+# Required per BUILD_UNIX.TXT + confirmed linker flags (-lssl -lcrypto -lreadline -lncurses -lz)
+BUILD_DEPS="build-essential libssl-dev libreadline-dev libncurses-dev zlib1g-dev"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BOLD='\033[1m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[+]${NC} $*"; }
@@ -29,7 +31,7 @@ if ask "Install build dependencies now?"; then
     apt-get install -y $BUILD_DEPS
 fi
 
-for dep in gcc cmake make; do
+for dep in gcc make; do
     command -v "$dep" &>/dev/null || error "$dep not found — install build dependencies first"
 done
 
@@ -52,6 +54,7 @@ INSTALL_DIR=$(prompt "Install directory [$DEFAULT_INSTALL_DIR]:" "$DEFAULT_INSTA
 # Build in temp dir
 BUILD_DIR=$(mktemp -d)
 trap "rm -rf $BUILD_DIR" EXIT
+
 info "Cloning SoftEther $SE_TAG (this may take a few minutes)..."
 git clone --depth 1 --branch "$SE_TAG" "$SE_REPO" "$BUILD_DIR/src"
 
@@ -60,15 +63,15 @@ git -C "$BUILD_DIR/src" apply "$PATCH"
 
 info "Configuring..."
 cd "$BUILD_DIR/src"
-cmake . -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -3
+./configure
 
 info "Building (this takes several minutes)..."
-make -j"$(nproc)" 2>&1 | tail -5
+make -j"$(nproc)"
 
 # Install
 info "Installing to $INSTALL_DIR ..."
 mkdir -p "$INSTALL_DIR"
-cp bin/vpnserver/vpnserver  "$INSTALL_DIR/"
+cp bin/vpnserver/vpnserver   "$INSTALL_DIR/"
 cp bin/vpnserver/hamcore.se2 "$INSTALL_DIR/"
 cp bin/vpncmd/vpncmd         "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/vpnserver" "$INSTALL_DIR/vpncmd"
@@ -76,21 +79,9 @@ info "Binaries installed"
 
 # Service
 if ask "Install as systemd service?"; then
-    cat > /etc/systemd/system/vpnserver.service <<EOF
-[Unit]
-Description=SoftEther VPN Server (YK1)
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/vpnserver execsvc
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
+    # Use the official service file from source, adjusted for install dir
+    sed "s|/opt/vpnserver|$INSTALL_DIR|g" systemd/softether-vpnserver.service \
+        > /etc/systemd/system/vpnserver.service
 
     systemctl daemon-reload
     systemctl enable vpnserver
@@ -107,4 +98,4 @@ else
 fi
 
 echo
-info "Done. Run 'vpncmd' at $INSTALL_DIR/vpncmd to configure."
+info "Done. Configure with: $INSTALL_DIR/vpncmd"
