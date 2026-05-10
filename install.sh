@@ -15,8 +15,19 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BOLD='\033[1m'; NC='\
 info()  { echo -e "${GREEN}[+]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[!]${NC} $*"; }
 error() { echo -e "${RED}[x]${NC} $*" >&2; exit 1; }
-ask()   { local r; read -rp "$1 [y/N] " r < /dev/tty; [[ "$r" =~ ^[Yy]$ ]]; }
-prompt(){ local r; read -rp "$1 " r < /dev/tty; echo "${r:-$2}"; }
+
+# Check once whether /dev/tty is usable (unavailable in Docker/piped installs)
+TTY_OK=false
+{ true < /dev/tty; } 2>/dev/null && TTY_OK=true || true
+
+ask() {
+    $TTY_OK || { warn "Non-interactive — skipping: $1 (defaulting No)"; return 1; }
+    local r; read -rp "$1 [y/N] " r < /dev/tty; [[ "$r" =~ ^[Yy]$ ]]
+}
+prompt() {
+    $TTY_OK || { echo "$2"; return; }
+    local r; read -rp "$1 " r < /dev/tty; echo "${r:-$2}"
+}
 
 echo -e "${BOLD}SoftEther VPN Server — YK1 patch installer${NC}"
 echo -e "Installs SoftEther $SE_TAG with YubiKey PIV PKCS#11 support"
@@ -35,6 +46,10 @@ for dep in gcc make; do
     command -v "$dep" &>/dev/null || error "$dep not found — install build dependencies first"
 done
 
+# Build in temp dir (set up before patch lookup so downloaded patch lands here)
+BUILD_DIR=$(mktemp -d)
+trap 'rm -rf "$BUILD_DIR"' EXIT
+
 # Locate patch file
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-./}")" 2>/dev/null && pwd || echo ".")"
 if [ -f "$SCRIPT_DIR/yk1.patch" ]; then
@@ -42,18 +57,13 @@ if [ -f "$SCRIPT_DIR/yk1.patch" ]; then
     info "Using local patch: $PATCH"
 else
     info "Downloading patch from GitHub..."
-    PATCH=$(mktemp --suffix=.patch)
+    PATCH="$BUILD_DIR/yk1.patch"
     curl -sSL "$PATCH_URL" -o "$PATCH"
-    trap "rm -f $PATCH" EXIT
 fi
 
 # Install directory
 INSTALL_DIR=$(prompt "Install directory [$DEFAULT_INSTALL_DIR]:" "$DEFAULT_INSTALL_DIR")
 [ ! -d "$INSTALL_DIR" ] || warn "$INSTALL_DIR already exists — files will be overwritten"
-
-# Build in temp dir
-BUILD_DIR=$(mktemp -d)
-trap "rm -rf $BUILD_DIR" EXIT
 
 info "Cloning SoftEther $SE_TAG (this may take a few minutes)..."
 git clone --depth 1 --branch "$SE_TAG" "$SE_REPO" "$BUILD_DIR/src"
