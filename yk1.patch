@@ -1,0 +1,102 @@
+From 42ac9f25eeb9a9379a5f638ce162f5510b4ce5d7 Mon Sep 17 00:00:00 2001
+From: username-mendoza <mailtomendoza@gmail.com>
+Date: Sun, 10 May 2026 21:38:53 +0300
+Subject: [PATCH] Add YubiKey PIV PKCS#11 support (YK1 patch)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Secure.h: add YubiKey 5 to PKCS#11 device list (libykcs11.dll / libykcs11.so)
+- Protocol.c: strip @domain suffix from cert CN in PackLoginWithOpenVPNCertificate
+- Cedar.c: version string suffix → Build 9807-YK1
+- Console.c: fix extended key sequence handling on Linux (OS_WIN32 guard)
+- VLanUnix.h: declare FreeTap()
+
+Enables OpenVPN clients to authenticate with YubiKey PIV certificates
+via PKCS#11 without patching the client side.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ src/Cedar/Cedar.c    | 2 +-
+ src/Cedar/Console.c  | 6 +++++-
+ src/Cedar/Protocol.c | 6 ++++++
+ src/Cedar/VLanUnix.h | 1 +
+ src/Mayaqua/Secure.h | 2 ++
+ 5 files changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/src/Cedar/Cedar.c b/src/Cedar/Cedar.c
+index 048c799..eac8dc2 100644
+--- a/src/Cedar/Cedar.c
++++ b/src/Cedar/Cedar.c
+@@ -1777,7 +1777,7 @@ CEDAR *NewCedar(X *server_x, K *server_k)
+ 
+ 	ToStr(tmp2, c->Beta);
+ 
+-	Format(tmp, sizeof(tmp), "Version %u.%02u Build %u %s %s (%s)",
++	Format(tmp, sizeof(tmp), "Version %u.%02u Build %u-YK1 %s %s (%s)",
+ 		CEDAR_VER / 100, CEDAR_VER - (CEDAR_VER / 100) * 100,
+ 		CEDAR_BUILD,
+ 		c->Beta == 0 ? "" : beta_str,
+diff --git a/src/Cedar/Console.c b/src/Cedar/Console.c
+index 3c6c90c..3616052 100644
+--- a/src/Cedar/Console.c
++++ b/src/Cedar/Console.c
+@@ -2038,8 +2038,12 @@ bool PasswordPrompt(char *password, UINT size)
+ 		}
+ 		else if (c == 0xE0)
+ 		{
+-			// Read one more character
++			// Read one more character (extended key sequence, Windows only)
++#ifdef	OS_WIN32
+ 			c = getch();
++#else	// OS_WIN32
++			c = getc(stdin);
++#endif	// OS_WIN32
+ 			if (c == 0x4B || c == 0x53)
+ 			{
+ 				// Backspace
+diff --git a/src/Cedar/Protocol.c b/src/Cedar/Protocol.c
+index fb6867c..0ab6cf8 100644
+--- a/src/Cedar/Protocol.c
++++ b/src/Cedar/Protocol.c
+@@ -8403,6 +8403,12 @@ PACK *PackLoginWithOpenVPNCertificate(char *hubname, char *username, X *x)
+ 			return NULL;
+ 		}
+ 		UniToStr(cn_username, sizeof(cn_username), x->subject_name->CommonName);
++		// Strip @domain suffix from cert CN so "alice@example.com" matches username "alice"
++		char *at = strchr(cn_username, '@');
++		if (at != NULL)
++		{
++			*at = '\0';
++		}
+ 		PackAddStr(p, "username", cn_username);
+ 	}
+ 	else
+diff --git a/src/Cedar/VLanUnix.h b/src/Cedar/VLanUnix.h
+index fa878e5..556aecd 100644
+--- a/src/Cedar/VLanUnix.h
++++ b/src/Cedar/VLanUnix.h
+@@ -122,6 +122,7 @@ struct VLAN
+ VLAN *NewVLan(char *instance_name, VLAN_PARAM *param);
+ VLAN *NewTap(char *name, char *mac_address);
+ void FreeVLan(VLAN *v);
++void FreeTap(VLAN *v);
+ CANCEL *VLanGetCancel(VLAN *v);
+ bool VLanGetNextPacket(VLAN *v, void **buf, UINT *size);
+ bool VLanPutPacket(VLAN *v, void *buf, UINT size);
+diff --git a/src/Mayaqua/Secure.h b/src/Mayaqua/Secure.h
+index 7654acb..0c62f35 100644
+--- a/src/Mayaqua/Secure.h
++++ b/src/Mayaqua/Secure.h
+@@ -305,6 +305,8 @@ SECURE_DEVICE SupportedList[] =
+ 	{25,	SECURE_USB_TOKEN,	"SafeNet",				"SafeNet",				"IDPrimePKCS1164.dll "},
+ 	{26,	SECURE_USB_TOKEN,	"OpenSC",				"OpenSC",				"opensc-pkcs11.dll"},
+ 	{27,	SECURE_USB_TOKEN,	"SHALO AUTH",			"AXELL CORPORATION",	"slpkcs11-vc.dll"},
++	{28,	SECURE_USB_TOKEN,	"YubiKey 5 (Windows)",	"Yubico",				"libykcs11.dll"},
++	{29,	SECURE_USB_TOKEN,	"YubiKey 5 (Linux)",	"Yubico",				"libykcs11.so"},
+ };
+ 
+ #ifdef	OS_WIN32
+-- 
+2.47.3
+
