@@ -22,15 +22,56 @@ Requires: Debian/Ubuntu-based system, `git`, `curl`, internet access.
 
 ## Manual build
 
+### 1. Install build dependencies
+
+Debian / Ubuntu:
 ```bash
-git clone https://github.com/SoftEtherVPN/SoftEtherVPN_Stable.git
-cd SoftEtherVPN_Stable
-git checkout v4.44-9807-rtm
-git apply /path/to/yk1.patch
-cmake . && make -j$(nproc)
+sudo apt-get install build-essential libssl-dev libreadline-dev libncurses-dev zlib1g-dev
 ```
 
-Binaries end up in `bin/vpnserver/` and `bin/vpncmd/`.
+Fedora / CentOS:
+```bash
+sudo yum groupinstall "Development Tools"
+sudo yum install openssl-devel readline-devel ncurses-devel zlib-devel
+```
+
+### 2. Clone, patch, build
+
+```bash
+git clone --depth 1 --branch v4.44-9807-rtm \
+    https://github.com/SoftEtherVPN/SoftEtherVPN_Stable.git
+cd SoftEtherVPN_Stable
+git apply /path/to/yk1.patch
+./configure
+make -j$(nproc)
+```
+
+Binaries end up in `bin/vpnserver/` (vpnserver + hamcore.se2) and `bin/vpncmd/`.
+
+### 3. Install
+
+```bash
+sudo mkdir -p /opt/vpnserver
+sudo cp bin/vpnserver/vpnserver bin/vpnserver/hamcore.se2 bin/vpncmd/vpncmd /opt/vpnserver/
+sudo chmod +x /opt/vpnserver/vpnserver /opt/vpnserver/vpncmd
+```
+
+### 4. Systemd service (optional)
+
+A service file is included in the source at `systemd/softether-vpnserver.service`. Adjust the path if you installed somewhere other than `/opt/vpnserver/`:
+
+```bash
+sudo sed 's|/opt/vpnserver|/your/path|g' \
+    systemd/softether-vpnserver.service \
+    > /etc/systemd/system/vpnserver.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now vpnserver
+```
+
+Or start directly:
+```bash
+/opt/vpnserver/vpnserver start
+```
 
 ## Client setup
 
