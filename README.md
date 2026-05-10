@@ -10,16 +10,27 @@ Patch for **SoftEther VPN v4.44-9807-rtm** adding YubiKey PIV PKCS#11 certificat
 - **`src/Cedar/Console.c`** — fix extended key sequence handling on Linux (`OS_WIN32` guard)
 - **`src/Cedar/VLanUnix.h`** — declare `FreeTap()`
 
-## How to apply
+## Quick install
+
+```bash
+sudo bash <(curl -sSL https://raw.githubusercontent.com/username-mendoza/SoftEtherVPN-YK1/main/install.sh)
+```
+
+The script installs build dependencies (optional), clones SoftEther v4.44-9807-rtm, applies the patch, compiles, and installs the binaries. Optionally installs and starts a systemd service. It asks before doing anything non-trivial.
+
+Requires: Debian/Ubuntu-based system, `git`, `curl`, internet access.
+
+## Manual build
 
 ```bash
 git clone https://github.com/SoftEtherVPN/SoftEtherVPN_Stable.git
 cd SoftEtherVPN_Stable
 git checkout v4.44-9807-rtm
 git apply /path/to/yk1.patch
+cmake . && make -j$(nproc)
 ```
 
-Then build normally per the SoftEther build instructions.
+Binaries end up in `bin/vpnserver/` and `bin/vpncmd/`.
 
 ## Client setup
 
